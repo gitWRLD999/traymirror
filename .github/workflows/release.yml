@@ -1,0 +1,333 @@
+name: release
+
+# Packages and publishes traymirror for win-x64 only. There is no arm64 build.
+# A release carries exactly three files: a self-contained single-file exe, a
+# framework-dependent zip that needs the .NET 10 Desktop Runtime, and
+# SHA256SUMS.txt.
+#
+# NOT ACTIVE YET: the project published below (src/TrayMirror) is documented
+# intent, not a file on disk. This workflow starts producing releases once the
+# projects land and a v* tag is pushed. The preflight step in the package job
+# says so out loud rather than failing with an opaque MSBuild error.
+#
+# CODE SIGNING: the binaries produced here are UNSIGNED. There is no
+# Authenticode certificate for this project, no cosign or sigstore signature,
+# and no build provenance attestation. Windows SmartScreen shows a "Windows
+# protected your PC" warning the first time a user runs the executable, and the
+# publisher reads as unknown. That is expected, not a fault. SHA256SUMS.txt is
+# published alongside the binaries, and comparing it with Get-FileHash is the
+# only verification a user can perform.
+#
+# Both jobs run on windows-latest: a WPF application cannot be published from
+# Linux, and keeping every workflow on one runner means contributors debug one
+# environment instead of two.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "semver without the leading v, for example 1.2.0"
+        required: true
+        type: string
+
+# Read only by default. Write access to contents is granted to the release job
+# alone, which is the only job that mutates the repository. There is no
+# id-token permission, because nothing in this workflow signs or attests
+# anything.
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  package:
+    name: package win-x64
+    runs-on: windows-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json', '**/Directory.Packages.props', '**/*.csproj', 'global.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      # The dispatch input is read through the environment rather than
+      # interpolated into the script body, so it cannot inject shell.
+      - name: Resolve the version
+        id: version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            version="$INPUT_VERSION"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::Version '${version}' is not semver. Tag the commit as v1.2.3, or pass 1.2.3 to workflow_dispatch."
+            exit 1
+          fi
+
+          # A hyphen means a semver prerelease identifier, for example
+          # 1.2.0-rc.1, so mark the GitHub release accordingly.
+          case "$version" in
+            *-*) prerelease=true ;;
+            *)   prerelease=false ;;
+          esac
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
+          echo "Building version ${version} (prerelease: ${prerelease})."
+
+      # The application projects are documented intent and are not in the
+      # repository yet, so tagging a release today cannot produce binaries.
+      # Fail with a readable message instead of an opaque restore error.
+      - name: Check that the application project exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f src/TrayMirror/TrayMirror.csproj ]; then
+            echo "::error::src/TrayMirror/TrayMirror.csproj is missing, so there is nothing to package. The application projects are not in the repository yet."
+            exit 1
+          fi
+
+      - name: Restore
+        run: dotnet restore
+
+      # Self contained, single file. This is the build most users want: it runs
+      # on a clean Windows 11 machine with no .NET runtime installed. It is much
+      # larger than the framework-dependent zip, and that is an accepted trade.
+      # Trimming is NOT enabled, because WPF plus reflection over the interop
+      # types breaks under the trimmer.
+      - name: Publish the self-contained single-file build
+        run: >
+          dotnet publish src/TrayMirror/TrayMirror.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:PublishTrimmed=false
+          -p:DebugType=embedded
+          -p:Version=${{ steps.version.outputs.version }}
+          -o publish/self-contained
+
+      # Framework dependent. Much smaller, but it needs the .NET 10 Desktop
+      # Runtime already installed. Offered for users who manage runtimes
+      # centrally and do not want a private copy per application.
+      - name: Publish the framework-dependent build
+        run: >
+          dotnet publish src/TrayMirror/TrayMirror.csproj
+          -c Release
+          -r win-x64
+          --self-contained false
+          -p:PublishSingleFile=false
+          -p:DebugType=embedded
+          -p:Version=${{ steps.version.outputs.version }}
+          -o publish/framework-dependent
+
+      - name: Stage the release assets
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ver = $env:VERSION
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+
+          $exe = @(Get-ChildItem -Path 'publish/self-contained' -Filter '*.exe' -File)
+          if ($exe.Count -ne 1) {
+            Write-Host "::error::Expected exactly one executable in the self-contained publish output, found $($exe.Count). The single-file publish did not produce what this workflow assumes."
+            exit 1
+          }
+          Copy-Item -LiteralPath $exe[0].FullName -Destination "dist/traymirror-$ver-win-x64.exe"
+
+          # MIT requires the licence text to travel with redistributed copies,
+          # so the archive carries LICENSE and README.md.
+          foreach ($extra in @('LICENSE', 'README.md')) {
+            if (Test-Path -LiteralPath $extra) {
+              Copy-Item -LiteralPath $extra -Destination 'publish/framework-dependent/'
+            } else {
+              Write-Host "::warning::$extra was not found at the repository root, so it is missing from the framework-dependent archive."
+            }
+          }
+          Compress-Archive -Path 'publish/framework-dependent/*' -DestinationPath "dist/traymirror-$ver-win-x64-framework-dependent.zip" -CompressionLevel Optimal
+
+          Get-ChildItem -Path dist -File | Select-Object Name, Length
+
+      # Written with LF endings and two spaces between hash and name, so that
+      # `sha256sum -c SHA256SUMS.txt` works as well as PowerShell Get-FileHash.
+      - name: Generate SHA256SUMS.txt
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Filter with Where-Object rather than -Exclude: Get-ChildItem -Exclude
+          # against a container path returns nothing at all, which would have
+          # produced an empty checksum file instead of an error.
+          $files = @(Get-ChildItem -Path dist -File | Where-Object { $_.Name -ne 'SHA256SUMS.txt' } | Sort-Object Name)
+          if ($files.Count -eq 0) {
+            Write-Host "::error::No release assets were staged, so there is nothing to checksum."
+            exit 1
+          }
+          $lines = $files | ForEach-Object {
+            '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
+          }
+          [System.IO.File]::WriteAllText((Join-Path (Get-Location).Path 'dist/SHA256SUMS.txt'), (($lines -join "`n") + "`n"))
+          Get-Content -LiteralPath 'dist/SHA256SUMS.txt'
+
+      - name: Upload the release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: traymirror-win-x64
+          path: dist/**
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: release
+    needs: package
+    runs-on: windows-latest
+    timeout-minutes: 15
+    # The only elevated permission in this workflow, and it lives on the only
+    # job that needs it.
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Download the release assets
+        uses: actions/download-artifact@v4
+        with:
+          name: traymirror-win-x64
+          path: dist
+
+      - name: Build the release body from CHANGELOG.md
+        shell: bash
+        env:
+          VERSION: ${{ needs.package.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [ ! -f CHANGELOG.md ]; then
+            echo "::error file=CHANGELOG.md::CHANGELOG.md is missing, so there is no release body to publish."
+            exit 1
+          fi
+
+          # Take everything between the heading for this version and the next
+          # H2. Matches both Keep a Changelog style (## [1.2.0] - 2026-08-10)
+          # and the bare form (## 1.2.0).
+          awk -v ver="$VERSION" '
+            BEGIN { want1 = "## [" ver "]"; want2 = "## " ver }
+            /^## / {
+              if (inSection) { exit }
+              if (index($0, want1) == 1) { inSection = 1; next }
+              if (index($0, want2) == 1) {
+                rest = substr($0, length(want2) + 1)
+                if (rest == "" || rest !~ /^[0-9A-Za-z.]/) { inSection = 1; next }
+              }
+              next
+            }
+            inSection { print }
+          ' CHANGELOG.md > section.md
+
+          # Drop leading blank lines.
+          sed -i '/./,$!d' section.md
+
+          if ! grep -q '[^[:space:]]' section.md; then
+            echo "::error file=CHANGELOG.md::No CHANGELOG.md section was found for version ${VERSION}. Add a '## [${VERSION}] - YYYY-MM-DD' section before tagging the release."
+            exit 1
+          fi
+
+          # The heredoc body sits at the base indentation of this YAML block
+          # scalar, so YAML strips it back to column 0 before the shell sees it.
+          # Indenting it any further would indent the Markdown as well.
+          {
+            cat section.md
+            cat <<'MD'
+
+          ## Verifying your download
+
+          Checksums are the only verification this project offers. There is no code signature, no cosign or sigstore bundle, and no build provenance attestation to check.
+
+          Download `SHA256SUMS.txt` from this release, then hash the file you downloaded:
+
+          ```powershell
+          Get-FileHash .\traymirror-<version>-win-x64.exe -Algorithm SHA256
+          ```
+
+          Compare the result against the matching line in `SHA256SUMS.txt`. The hashes there are lowercase, so compare case insensitively. If they do not match, delete the download and do not run it.
+
+          ## These binaries are unsigned
+
+          There is no Authenticode code signing certificate for this project, so nothing in this release is signed. Windows SmartScreen will warn you the first time you run the executable, and the publisher will show as unknown. Once the SHA256 hash matches, choose **More info** and then **Run anyway**.
+
+          ## Which download do you want
+
+          Both downloads are win-x64. There is no arm64 build.
+
+          - **`traymirror-<version>-win-x64.exe`**: self contained, runs on a clean Windows 11 machine with no .NET runtime installed. Larger file.
+          - **`traymirror-<version>-win-x64-framework-dependent.zip`**: smaller, but you need the .NET 10 Desktop Runtime (x64) installed first. Without it the application will not start.
+
+          Windows 11 21H2 (build 22000) or later is required in both cases.
+          MD
+          } > release-notes.md
+
+          echo "Release body:"
+          cat release-notes.md
+
+      # Created as a DRAFT: nothing ships to users until a human has read the
+      # notes and pressed publish. Uses the preinstalled GitHub CLI rather than
+      # a third-party action, so there is no external action to pin to a commit
+      # SHA and no extra supply chain surface.
+      - name: Create the draft GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.package.outputs.tag }}
+          PRERELEASE: ${{ needs.package.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+
+          args=(
+            "$TAG"
+            --draft
+            --title "traymirror $TAG"
+            --notes-file release-notes.md
+            --target "$GITHUB_SHA"
+          )
+          if [ "$PRERELEASE" = "true" ]; then
+            args+=(--prerelease)
+          fi
+
+          gh release create "${args[@]}" dist/*
+
+          echo "Draft release ${TAG} created. Review it and publish it manually."

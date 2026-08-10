@@ -1,0 +1,34 @@
+# Default: normalise line endings to CRLF on checkout (Windows repo).
+# text=auto lets Git detect text vs binary; eol=crlf sets the checkout
+# line ending for all detected text files.
+* text=auto eol=crlf
+
+# ── Unix line endings ─────────────────────────────────────────────────────────
+# Shell scripts and YAML keep LF on every platform. CRLF in a .sh file breaks
+# the shebang line in any POSIX shell, including Git Bash on Windows, and LF is
+# the conventional line ending for both formats.
+*.sh   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+# ── Binary assets: no line-ending normalisation, no diff ─────────────────────
+*.png  binary
+*.ico  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.snk  binary
+
+# ── Linguist overrides ────────────────────────────────────────────────────────
+# Without hints, GitHub counts .csproj XML toward its language breakdown.
+# Marking project and build files as non-detectable keeps the bar chart
+# accurate: this is a C# repo.
+*.csproj linguist-language=XML  linguist-detectable=false
+*.props  linguist-language=XML  linguist-detectable=false
+*.targets linguist-language=XML linguist-detectable=false
+
+# XAML is part of the application source and should count toward C#/XAML.
+*.xaml linguist-language=XML linguist-detectable=true
+
+# Markdown documentation is documentation, not application code.
+*.md linguist-documentation=true

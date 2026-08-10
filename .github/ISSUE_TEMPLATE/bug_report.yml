@@ -1,0 +1,122 @@
+name: Bug report
+description: Report incorrect or unexpected behaviour in traymirror.
+title: "[BUG]: "
+labels: ["bug"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing a bug, check [Discussions](https://github.com/latticelabs-au/traymirror/discussions)
+        and existing issues to see whether it has already been reported.
+
+  - type: input
+    id: traymirror-version
+    attributes:
+      label: traymirror version
+      description: The version shown in the tray icon tooltip.
+      placeholder: "e.g. 1.2.0"
+    validations:
+      required: true
+
+  - type: input
+    id: windows-build
+    attributes:
+      label: Windows build number
+      description: Run `winver` and paste the full build string shown (e.g. "Version 24H2 (OS Build 26100.4061)").
+      placeholder: "Version 24H2 (OS Build 26100.xxxx)"
+    validations:
+      required: true
+
+  - type: input
+    id: monitor-count
+    attributes:
+      label: Monitor count and layout
+      description: >
+        How many monitors are connected and how are they arranged? Include whether they are
+        extended or cloned, and which is set as the primary display.
+      placeholder: "e.g. 3 monitors, extended, primary is centre (Display 2)"
+    validations:
+      required: true
+
+  - type: input
+    id: dpi-scaling
+    attributes:
+      label: Per-monitor scaling percentages
+      description: >
+        The scaling percentage for each monitor as shown in Settings > Display > Scale.
+        List them in the same order as your monitor layout above.
+      placeholder: "e.g. Display 1: 150%, Display 2: 100%, Display 3: 125%"
+    validations:
+      required: true
+
+  - type: input
+    id: gpu-driver
+    attributes:
+      label: GPU and driver version
+      description: >
+        GPU model and driver version. Find the driver version in Device Manager > Display
+        Adapters > right-click > Properties > Driver tab, or in the GPU vendor's control panel.
+      placeholder: "e.g. NVIDIA GeForce RTX 4070, driver 566.36"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: elevated
+    attributes:
+      label: Was traymirror running elevated (as administrator)?
+      options:
+        - "Yes"
+        - "No"
+        - "Unsure"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What did you expect traymirror to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What did traymirror actually do? Include any error messages or visual artefacts.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: A minimal, ordered list of steps that reliably triggers the problem.
+      placeholder: |
+        1. Launch traymirror
+        2. ...
+        3. Observe that ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics output
+      description: >
+        Set `"diagnosticsLog": true` in `%APPDATA%\TrayMirror\traymirror.jsonc`, reproduce the
+        problem, then paste the contents of `%TEMP%\traymirror.log` here. Otherwise leave blank.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: >
+        Anything else that may be relevant: whether the issue appeared after a Windows update,
+        whether it is reproducible in a fresh Windows session, RDP involvement, and so on.
+    validations:
+      required: false

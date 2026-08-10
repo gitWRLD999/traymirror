@@ -1,0 +1,80 @@
+<!--
+  Repo-wide MSBuild defaults inherited by every project in this solution.
+
+  UseWPF is intentionally absent here. TrayMirror.Core is a UI-free library
+  that must be testable without WPF; setting UseWPF globally would pull WPF
+  assemblies into that project and break that invariant. Set UseWPF only in
+  src/TrayMirror/TrayMirror.csproj.
+
+  ContinuousIntegrationBuild is conditioned on the CI environment variable so
+  that local developer builds remain fast (no path-mapped PDBs) while release
+  and CI builds are fully reproducible and source-link-compatible.
+-->
+<Project>
+
+  <!-- Target: Windows 11 21H2 minimum; Windows 11 22H2 SDK surface. -->
+  <PropertyGroup Label="Target">
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.22000.0</SupportedOSPlatformVersion>
+  </PropertyGroup>
+
+  <!-- Language: latest C# with full nullability and implicit usings. -->
+  <PropertyGroup Label="Language">
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <!--
+    Strictness: the org philosophy is maximum compiler strictness with
+    minimal bolt-on tooling. These properties promote every Roslyn analyser
+    warning to a build error so no separate linter is needed.
+
+    AnalysisMode=All enables the full CA ruleset. TreatWarningsAsErrors covers
+    the complete nullable warning family (CS8600 through CS8655).
+  -->
+  <PropertyGroup Label="Strictness">
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningLevel>9999</WarningLevel>
+    <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-all</AnalysisLevel>
+    <AnalysisMode>All</AnalysisMode>
+  </PropertyGroup>
+
+  <!-- Build: deterministic output and locked restore in CI. -->
+  <PropertyGroup Label="Build">
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Deterministic>true</Deterministic>
+    <!-- Enables source-mapped PDB paths so CI-built binaries reproduce exactly. -->
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <AccelerateBuildsInVisualStudio>true</AccelerateBuildsInVisualStudio>
+    <!-- Commit packages.lock.json and lock the restore graph in CI so a rogue
+         upstream package cannot silently change a transitive dependency. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(ContinuousIntegrationBuild)' == 'true'">true</RestoreLockedMode>
+  </PropertyGroup>
+
+  <!-- Metadata: assembly and package identity for all projects. -->
+  <PropertyGroup Label="Metadata">
+    <Company>Lattice Labs</Company>
+    <Product>TrayMirror</Product>
+    <Authors>Lattice Labs</Authors>
+    <Copyright>Copyright (c) 2026 Lattice Labs</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/latticelabs-au/traymirror</RepositoryUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+  </PropertyGroup>
+
+  <!--
+    Suppressions: each entry must carry an inline justification. A suppressed
+    diagnostic with no explanation is a review blocker.
+  -->
+  <PropertyGroup Label="Suppressions">
+    <!-- CA1707: test method names use underscores (Should_DoThing_WhenCondition
+         style). Suppressed globally so the test project need not repeat it. -->
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
+  </PropertyGroup>
+
+</Project>

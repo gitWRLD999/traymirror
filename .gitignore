@@ -1,0 +1,88 @@
+# ── .NET / MSBuild build output ───────────────────────────────────────────────
+[Bb]in/
+[Oo]bj/
+[Aa]rtifacts/
+
+# Publish output produced by `dotnet publish`
+publish/
+out/
+
+# NuGet packages
+*.nupkg
+*.snupkg
+
+# NuGet restore state (lock file is committed; the per-user cache is not)
+.nuget/
+packages/
+
+# Central package management transitive pin cache
+*.lock.json.bak
+
+# MSBuild crash files
+MSBuild_*.failure.bin
+
+# ── Visual Studio ─────────────────────────────────────────────────────────────
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio profiling
+*.psess
+*.vsp
+*.vspx
+*.sap
+
+# ReSharper
+_ReSharperCache/
+*.DotSettings.user
+
+# ── Test results and coverage ─────────────────────────────────────────────────
+TestResults/
+[Cc]overage*/
+*.trx
+*.coverage
+*.coveragexml
+
+# ── Editors ───────────────────────────────────────────────────────────────────
+# VS Code
+.vscode/
+
+# JetBrains Rider / IntelliJ
+.idea/
+
+# ── Operating system noise ────────────────────────────────────────────────────
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+desktop.ini
+
+# ── Secrets and local environment ─────────────────────────────────────────────
+# Never commit secrets. If a file matching these patterns is needed locally,
+# document it in CONTRIBUTING.md and keep it out of version control.
+*.env
+.env.*
+*.env.local
+secrets.json
+appsettings.Development.json
+appsettings.Local.json
+
+# ── Local draft documents ─────────────────────────────────────────────────────
+# Scratchpad files and marketing drafts stay local.
+docs/blog-post.md
+docs/reddit-post.md
+docs/draft-*.md
+docs/scratch-*.md
+
+# ── Single-file publish output ────────────────────────────────────────────────
+# Self-contained single-file binaries from `dotnet publish`. The build
+# artefacts directory (artifacts/) already covers these, but this catches
+# any manual publish runs in the project directory.
+*.exe.bak

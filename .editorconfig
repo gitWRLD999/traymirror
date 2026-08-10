@@ -1,0 +1,311 @@
+# root = true stops editors from searching parent directories for further
+# .editorconfig files. Every rule in this file is therefore absolute.
+root = true
+
+# ── All files ─────────────────────────────────────────────────────────────────
+[*]
+charset                  = utf-8
+insert_final_newline     = true
+trim_trailing_whitespace = true
+indent_style             = space
+indent_size              = 4
+end_of_line              = crlf
+
+# ── YAML and shell scripts ────────────────────────────────────────────────────
+# LF line endings regardless of platform, matching the .gitattributes eol=lf
+# rules for these extensions. CRLF in a shell script breaks the shebang line in
+# any POSIX shell, including Git Bash on Windows.
+[*.{yml,yaml,sh}]
+end_of_line = lf
+indent_size = 2
+
+# ── JSON, XML, and MSBuild project files ─────────────────────────────────────
+[*.{json,xml,csproj,props,targets,xaml,config,resx}]
+indent_size = 2
+
+# ── Markdown: two trailing spaces are a deliberate line break in CommonMark. ──
+# Stripping them would silently alter rendered output.
+[*.md]
+trim_trailing_whitespace = false
+indent_size              = 2
+
+# ── C# and Visual Basic ───────────────────────────────────────────────────────
+[*.{cs,vb}]
+indent_size = 4
+
+# --------------------------------------------------------------------------
+# .NET language preferences
+# --------------------------------------------------------------------------
+
+# Always require accessibility modifiers. An implicit internal modifier on a
+# newly added class is a silent API surface change.
+dotnet_style_require_accessibility_modifiers = always:error
+
+# Qualify with `this.` only when disambiguation requires it; suppress it
+# everywhere else to reduce noise.
+dotnet_style_qualification_for_field    = false:warning
+dotnet_style_qualification_for_property = false:warning
+dotnet_style_qualification_for_method   = false:warning
+dotnet_style_qualification_for_event    = false:warning
+
+# Prefer language keywords (int, string, bool) over framework type names
+# (Int32, String, Boolean). Consistency across the codebase matters here.
+dotnet_style_predefined_type_for_locals_parameters_members = true:error
+dotnet_style_predefined_type_for_member_access             = true:error
+
+# Object and collection initialisers reduce mutation surface.
+dotnet_style_object_initializer     = true:suggestion
+dotnet_style_collection_initializer = true:suggestion
+
+# Null-conditional and null-coalescing operators are clearer than explicit
+# null checks and less likely to introduce double-evaluation bugs.
+dotnet_style_coalesce_expression                                     = true:warning
+dotnet_style_null_propagation                                        = true:warning
+dotnet_style_prefer_is_null_check_over_reference_equality_method     = true:error
+
+# Fields that are never reassigned after construction must be readonly.
+# This catches accidental mutation and enables compiler optimisations.
+dotnet_style_readonly_field = true:error
+
+# --------------------------------------------------------------------------
+# Using directive placement and sort order
+# --------------------------------------------------------------------------
+
+# System.* usings sort before all others. Consistent across the codebase and
+# matches the default dotnet format ordering.
+dotnet_sort_system_directives_first     = true
+dotnet_separate_import_directive_groups = false
+
+# Usings belong outside the namespace block. File-scoped namespaces (required
+# below) make inside-namespace placement semantically meaningless anyway.
+csharp_using_directive_placement = outside_namespace:error
+
+# --------------------------------------------------------------------------
+# C# language preferences
+# --------------------------------------------------------------------------
+
+# var: use it when the type is apparent from the right-hand side (new
+# expressions, casts, literals). Use the explicit type everywhere else so
+# the reader does not need to trace the declaration.
+csharp_style_var_for_built_in_types    = false:warning
+csharp_style_var_when_type_is_apparent = true:warning
+csharp_style_var_elsewhere             = false:suggestion
+
+# File-scoped namespaces remove one level of indentation across every file.
+# Required, not optional: the IDE0161 diagnostic below backs this up.
+csharp_style_namespace_declarations = file_scoped:error
+
+# Always require braces around control flow bodies, including single-statement
+# ones. This prevents the heartbleed and goto-fail class of bugs.
+csharp_prefer_braces = true:error
+
+# Expression-bodied members: permitted on simple, single-expression properties,
+# indexers, and accessors. Disallowed on constructors and methods, where the
+# extra line and braces aid readability and diff clarity.
+csharp_style_expression_bodied_methods         = false:warning
+csharp_style_expression_bodied_constructors    = false:error
+csharp_style_expression_bodied_operators       = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties      = when_on_single_line:warning
+csharp_style_expression_bodied_indexers        = when_on_single_line:warning
+csharp_style_expression_bodied_accessors       = when_on_single_line:warning
+csharp_style_expression_bodied_lambdas         = when_on_single_line:suggestion
+csharp_style_expression_bodied_local_functions = false:suggestion
+
+# Prefer pattern matching over is-and-cast sequences. Pattern matching is
+# more concise and eliminates the double-evaluation risk.
+csharp_style_prefer_pattern_matching                       = true:warning
+csharp_style_pattern_matching_over_is_with_cast_check      = true:warning
+csharp_style_pattern_matching_over_as_with_null_check      = true:warning
+
+# Switch expressions over switch statements when all arms return a value.
+csharp_style_prefer_switch_expression = true:suggestion
+
+# Index and range operators (^1, 1..3) where supported.
+csharp_style_prefer_index_operator = true:suggestion
+csharp_style_prefer_range_operator = true:suggestion
+
+# Inline variable declarations (out var result) at call sites.
+csharp_style_inlined_variable_declaration = true:warning
+
+# Prefer local functions over anonymous lambdas for recursive or named logic.
+csharp_style_prefer_local_over_anonymous_function = true:suggestion
+
+# --------------------------------------------------------------------------
+# Formatting rules
+# --------------------------------------------------------------------------
+
+csharp_new_line_before_open_brace                         = all
+csharp_new_line_before_else                               = true
+csharp_new_line_before_catch                              = true
+csharp_new_line_before_finally                            = true
+csharp_new_line_before_members_in_object_initializers    = true
+csharp_new_line_before_members_in_anonymous_types        = true
+csharp_new_line_between_query_expression_clauses         = true
+
+csharp_indent_case_contents              = true
+csharp_indent_switch_labels              = true
+csharp_indent_labels                     = flush_left
+csharp_indent_block_contents             = true
+csharp_indent_braces                     = false
+csharp_indent_case_contents_when_block   = true
+
+csharp_space_after_cast                                                   = false
+csharp_space_after_keywords_in_control_flow_statements                   = true
+csharp_space_between_method_declaration_parameter_list_parentheses       = false
+csharp_space_between_method_call_parameter_list_parentheses              = false
+csharp_space_between_parentheses                                          = false
+csharp_space_before_colon_in_inheritance_clause                          = true
+csharp_space_after_colon_in_inheritance_clause                           = true
+csharp_space_around_binary_operators                                      = before_and_after
+csharp_space_between_method_declaration_empty_parameter_list_parentheses = false
+csharp_space_between_method_call_name_and_opening_parenthesis            = false
+csharp_space_between_method_call_empty_parameter_list_parentheses        = false
+
+csharp_preserve_single_line_statements = false
+csharp_preserve_single_line_blocks     = true
+
+# --------------------------------------------------------------------------
+# Naming conventions
+# --------------------------------------------------------------------------
+# Rule precedence runs from most specific to least specific. More specific
+# rules are listed first.
+
+# Interfaces: required I prefix in PascalCase (e.g., IMonitorService).
+dotnet_naming_rule.interfaces_must_be_i_prefixed.symbols  = interface_symbols
+dotnet_naming_rule.interfaces_must_be_i_prefixed.style    = i_prefix_pascal_style
+dotnet_naming_rule.interfaces_must_be_i_prefixed.severity = error
+
+dotnet_naming_symbols.interface_symbols.applicable_kinds           = interface
+dotnet_naming_symbols.interface_symbols.applicable_accessibilities = *
+
+dotnet_naming_style.i_prefix_pascal_style.required_prefix = I
+dotnet_naming_style.i_prefix_pascal_style.capitalization  = pascal_case
+
+# Constants: PascalCase (e.g., MaxRetryCount). Const fields are never
+# prefixed with an underscore because they are not mutable state.
+dotnet_naming_rule.constants_must_be_pascal_case.symbols  = constant_field_symbols
+dotnet_naming_rule.constants_must_be_pascal_case.style    = pascal_case_style
+dotnet_naming_rule.constants_must_be_pascal_case.severity = error
+
+dotnet_naming_symbols.constant_field_symbols.applicable_kinds   = field
+dotnet_naming_symbols.constant_field_symbols.required_modifiers = const
+
+dotnet_naming_style.pascal_case_style.capitalization = pascal_case
+
+# Private and protected instance fields: _camelCase (e.g., _thumbnailHandle).
+# Static private fields follow the same rule to keep declarations uniform.
+dotnet_naming_rule.private_fields_must_be_underscore_camel.symbols  = private_field_symbols
+dotnet_naming_rule.private_fields_must_be_underscore_camel.style    = underscore_camel_style
+dotnet_naming_rule.private_fields_must_be_underscore_camel.severity = error
+
+dotnet_naming_symbols.private_field_symbols.applicable_kinds          = field
+dotnet_naming_symbols.private_field_symbols.applicable_accessibilities = private, protected, private_protected
+
+dotnet_naming_style.underscore_camel_style.required_prefix = _
+dotnet_naming_style.underscore_camel_style.capitalization  = camel_case
+
+# Public and internal types and members: PascalCase.
+dotnet_naming_rule.public_members_must_be_pascal_case.symbols  = public_member_symbols
+dotnet_naming_rule.public_members_must_be_pascal_case.style    = pascal_case_style
+dotnet_naming_rule.public_members_must_be_pascal_case.severity = warning
+
+dotnet_naming_symbols.public_member_symbols.applicable_kinds          = class, struct, enum, property, method, event, delegate, type_parameter
+dotnet_naming_symbols.public_member_symbols.applicable_accessibilities = public, internal
+
+# Parameters and local variables: camelCase.
+dotnet_naming_rule.locals_must_be_camel_case.symbols  = local_and_parameter_symbols
+dotnet_naming_rule.locals_must_be_camel_case.style    = camel_case_style
+dotnet_naming_rule.locals_must_be_camel_case.severity = warning
+
+dotnet_naming_symbols.local_and_parameter_symbols.applicable_kinds = parameter, local
+
+dotnet_naming_style.camel_case_style.capitalization = camel_case
+
+# --------------------------------------------------------------------------
+# Diagnostic severities: IDE rules
+# --------------------------------------------------------------------------
+
+# IDE0005: unused using directives. Stale usings are noise and obscure real
+# dependencies. Escalated to error so they cannot be committed.
+dotnet_diagnostic.IDE0005.severity = error
+
+# IDE0055: formatting violation. Pairs with EnforceCodeStyleInBuild so that
+# dotnet format is always a no-op on a correctly authored file.
+dotnet_diagnostic.IDE0055.severity = error
+
+# IDE0161: file-scoped namespace required. Enforces the csharp_style_namespace_declarations
+# rule at build time.
+dotnet_diagnostic.IDE0161.severity = error
+
+# IDE0065: using directives must be placed outside the namespace block.
+dotnet_diagnostic.IDE0065.severity = error
+
+# IDE0007: use var when the type is apparent from context.
+dotnet_diagnostic.IDE0007.severity = warning
+
+# IDE0079: remove unnecessary pragma suppression. Stale suppressions hide
+# whether an analyser rule is actually firing.
+dotnet_diagnostic.IDE0079.severity = warning
+
+# IDE0044: add readonly modifier to fields that are never reassigned.
+dotnet_diagnostic.IDE0044.severity = error
+
+# --------------------------------------------------------------------------
+# Diagnostic severities: CA correctness and interop rules
+# --------------------------------------------------------------------------
+
+# CA1401: P/Invoke methods must not be public. Exposing raw P/Invoke signatures
+# leaks Win32 types into the public API surface. Keep them internal or private.
+dotnet_diagnostic.CA1401.severity = error
+
+# CA2101: specify marshalling for P/Invoke string parameters. Without the
+# correct CharSet or MarshalAs, string data is silently misinterpreted.
+dotnet_diagnostic.CA2101.severity = error
+
+# CA1416: platform compatibility. Any call to a Windows-only API that is not
+# guarded by [SupportedOSPlatform] or a runtime check fails the build. This
+# app targets Windows only, so all DWM and Win32 surfaces must be annotated.
+dotnet_diagnostic.CA1416.severity = error
+
+# CA2000: dispose objects before losing scope. Critical for DWM thumbnail
+# handles and HWNDs, which are GDI-level resources with no GC finalisation.
+dotnet_diagnostic.CA2000.severity = error
+
+# CA1063: IDisposable must be implemented correctly. An incomplete Dispose
+# pattern on a handle wrapper will leak resources silently.
+dotnet_diagnostic.CA1063.severity = error
+
+# CA2007: ConfigureAwait. Disabled for this WPF desktop application. The app
+# intentionally returns to the UI thread after awaits so that property
+# assignments and Dispatcher calls are thread-safe by default. Forcing
+# ConfigureAwait(false) everywhere would require explicit Dispatcher.Invoke
+# calls at every await resumption, which is strictly worse for this codebase.
+dotnet_diagnostic.CA2007.severity = none
+
+# CA1031: catch general exception. Warn rather than error. There are legitimate
+# top-level recovery points (unhandled exception handlers, DWM reset on session
+# change) where catching Exception is the correct choice. Reviewers must
+# approve each occurrence.
+dotnet_diagnostic.CA1031.severity = warning
+
+# CA1303: do not pass literals as localised parameters. No localisation is
+# planned for a Windows system utility. Suppressed globally.
+dotnet_diagnostic.CA1303.severity = none
+
+# CA1848: use LoggerMessage delegates. Source-gen logging is overkill for a
+# small desktop utility with no throughput-sensitive logging paths.
+dotnet_diagnostic.CA1848.severity = none
+
+# --------------------------------------------------------------------------
+# Test project overrides: relax rules that conflict with xUnit conventions
+# --------------------------------------------------------------------------
+[tests/**/*.cs]
+
+# CA1707: test method names use underscores (Should_DoThing_WhenCondition).
+# This is suppressed globally via NoWarn in Directory.Build.props; the
+# line here is explicit documentation of the intent.
+dotnet_diagnostic.CA1707.severity = none
+
+# CA1861: constant arrays as inline test data via [InlineData(...)] are
+# intentional. Extracting them would harm test readability.
+dotnet_diagnostic.CA1861.severity = none

@@ -1,0 +1,59 @@
+version: 2
+
+# Weekly on Monday, matching the org's Monday freshness cadence.
+#
+# Minor and patch updates are grouped into a single pull request per ecosystem,
+# so routine version churn costs one review rather than a dozen. Major updates
+# are deliberately left ungrouped: each one is a behaviour change that deserves
+# its own pull request, its own CI run and its own decision.
+#
+# Commit prefixes follow Conventional Commits as defined in the house style:
+# `build` for dependency changes to the .NET package graph, `ci` for changes to
+# the workflow actions themselves. No scope is set, because Dependabot would
+# emit `deps`, which is not in the repository's fixed scope list.
+
+updates:
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Australia/Melbourne
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build"
+      prefix-development: "build"
+    labels:
+      - dependencies
+      - nuget
+    groups:
+      nuget-minor-and-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Australia/Melbourne
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    labels:
+      - dependencies
+      - github-actions
+    groups:
+      actions-minor-and-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

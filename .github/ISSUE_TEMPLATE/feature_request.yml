@@ -1,0 +1,64 @@
+name: Feature request
+description: Suggest a new feature or improvement to traymirror.
+title: "[FEATURE]: "
+labels: ["enhancement"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing a request, check [Discussions](https://github.com/latticelabs-au/traymirror/discussions)
+        and existing issues to see whether it has already been proposed.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: >
+        Describe the situation where the current behaviour falls short. Be specific: what
+        were you trying to do and what stopped you?
+      placeholder: "When I do X, traymirror does Y, but I need Z because ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: >
+        Describe what you would like traymirror to do instead. If you have ideas about
+        implementation, include them, but focus on the behaviour you want rather than code.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you have considered
+      description: >
+        Have you tried any workarounds? Are there other tools or approaches that address
+        the problem partially?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: monitor-count
+    attributes:
+      label: How many monitors does this feature involve?
+      options:
+        - "One (primary only)"
+        - "Two"
+        - "Three or more"
+        - "Not monitor-count-specific"
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: >
+        Screenshots, references to similar features in other tools, links to Windows API
+        documentation, or anything else that helps explain the request.
+    validations:
+      required: false

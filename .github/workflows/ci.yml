@@ -1,0 +1,193 @@
+name: ci
+
+# Build gate for traymirror. Three independent jobs so a contributor sees every
+# failure in one run: a compile break, a formatting break and a prose break are
+# reported separately rather than short circuiting each other.
+#
+# All three jobs run on windows-latest. The org rule is to build on the real
+# target OS rather than cross-compile, and WPF plus DWM interop cannot be built
+# or tested on Linux at all. The prose gate is pure text and could run cheaper
+# on ubuntu-latest, but keeping it on the same runner means contributors debug
+# one environment instead of two.
+#
+# CURRENT STATE: this repository is documentation and configuration only. There
+# is no traymirror.sln and no C# project on disk yet, so every dotnet step in
+# the build and format jobs is gated on the solution being present in the
+# checkout. Both jobs start doing real work on the commit that adds the
+# projects, and nothing here needs editing when that happens. The prose job is
+# not gated and runs on every trigger, because prose exists today.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  build:
+    name: build and test
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      # ACTIVATION GUARD. Every step below runs only once traymirror.sln is in
+      # the checkout. Without the guard, restore, build and test each fail on a
+      # repository that has no projects, which leaves this gate red for a reason
+      # no contributor can fix. hashFiles reads the workspace and is only
+      # available in a step-level condition, so the guard sits on the steps
+      # rather than on the job, and it has to come after the checkout.
+      - name: Report that there is nothing to build yet
+        if: hashFiles('traymirror.sln') == ''
+        run: echo "No traymirror.sln in the checkout, so the restore, build and test steps are skipped. They activate automatically on the commit that adds the projects."
+
+      - name: Set up the pinned .NET SDK
+        if: hashFiles('traymirror.sln') != ''
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      # Keyed on the lock files, the project files and the SDK pin, because any
+      # of those changing can change the resolved package graph. Only global.json
+      # matches today. The other patterns start contributing to the key when the
+      # projects land, and a pattern that matches nothing is simply ignored.
+      - name: Cache NuGet packages
+        if: hashFiles('traymirror.sln') != ''
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json', '**/Directory.Packages.props', '**/*.csproj', 'global.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        if: hashFiles('traymirror.sln') != ''
+        run: dotnet restore
+
+      # Warnings are already errors through TreatWarningsAsErrors in
+      # Directory.Build.props, so no -warnaserror flag is needed or wanted here.
+      # Setting it twice hides where the policy actually lives.
+      - name: Build
+        if: hashFiles('traymirror.sln') != ''
+        run: dotnet build -c Release --no-restore
+
+      - name: Test
+        if: hashFiles('traymirror.sln') != ''
+        run: dotnet test -c Release --no-build --logger "trx;LogFileName=traymirror-tests.trx" --results-directory artifacts/test-results
+
+      - name: Publish test results
+        if: always() && hashFiles('traymirror.sln') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: artifacts/test-results/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  format:
+    name: format
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      # ACTIVATION GUARD, for the same reason as the build job. dotnet format
+      # loads the projects through MSBuild, so with no solution on disk it fails
+      # instead of reporting clean. These steps activate when the projects land.
+      - name: Report that there is nothing to format yet
+        if: hashFiles('traymirror.sln') == ''
+        run: echo "No traymirror.sln in the checkout, so the formatting check is skipped. It activates automatically on the commit that adds the projects."
+
+      - name: Set up the pinned .NET SDK
+        if: hashFiles('traymirror.sln') != ''
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        if: hashFiles('traymirror.sln') != ''
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json', '**/Directory.Packages.props', '**/*.csproj', 'global.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      # dotnet format loads the projects through MSBuild, so the graph has to be
+      # restored first. Warming it here keeps the cache doing useful work.
+      - name: Restore
+        if: hashFiles('traymirror.sln') != ''
+        run: dotnet restore
+
+      # Verify only. This never rewrites a file in CI. The local fix is a bare
+      # `dotnet format`, documented in CONTRIBUTING.md.
+      - name: Verify formatting
+        if: hashFiles('traymirror.sln') != ''
+        run: dotnet format --verify-no-changes --severity error
+
+  prose:
+    name: prose (em dash gate)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      # POLICY versus ENFORCEMENT, which are two different things.
+      # The house rule bans U+2014 in every tracked file. This job enforces that
+      # rule for Markdown and the docs tree only.
+      #
+      # DELIBERATE SCOPE: '*.md' and 'docs/**'. Source files are not scanned. A
+      # U+2014 inside a C# string literal, a resource file or a commit message
+      # is out of scope for this gate on purpose, so the gate stays fast, stays
+      # free of false positives on generated or vendored code, and stays
+      # trivially explainable to a contributor. Those cases are caught in
+      # review, not here. The en dash U+2013 is not checked by CI at all.
+      - name: Forbid the em dash in Markdown and docs
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          # git grep exit codes: 0 means matches were found, 1 means none were
+          # found (the passing case), anything above 1 is a real failure. Guard
+          # all three, otherwise a broken grep would silently pass the gate.
+          set +e
+          matches="$(git grep -n -I -P '\x{2014}' -- '*.md' 'docs/**')"
+          status=$?
+          set -e
+
+          if [ "$status" -gt 1 ]; then
+            echo "::error::The em dash gate failed to run (git grep exited ${status}). This is a CI fault, not an authoring fault."
+            exit 1
+          fi
+
+          if [ "$status" -eq 1 ]; then
+            echo "No em dash found in Markdown or docs."
+            exit 0
+          fi
+
+          while IFS= read -r hit; do
+            [ -n "$hit" ] || continue
+            file="${hit%%:*}"
+            rest="${hit#*:}"
+            lineno="${rest%%:*}"
+            echo "::error file=${file},line=${lineno}::${file} line ${lineno} contains U+2014 EM DASH, which is banned in this repository. Rewrite the sentence with a colon, a comma pair, parentheses, or two sentences."
+          done <<< "$matches"
+
+          echo "::error::Em dash gate failed. Every file listed above must be rewritten before this pull request can merge."
+          exit 1
