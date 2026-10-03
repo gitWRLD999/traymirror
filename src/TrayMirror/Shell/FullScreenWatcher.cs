@@ -56,19 +56,24 @@ internal sealed class FullScreenWatcher : IDisposable
         "Shell_SecondaryTrayWnd",
         "Windows.UI.Core.CoreWindow",
 
-        // Shell panels that are monitor sized by construction. These matter more than they look:
-        // once a panel like this is relocated onto a mirror's monitor it would cover that monitor
-        // exactly, so without this the mirror would hide itself the moment the user opened quick
-        // settings or the language switcher on it.
+        // Shell panels and flyouts that are monitor sized or popup islands.
         "ControlCenterWindow",
         "Shell_InputSwitchTopLevelWindow",
         "Shell_InputSwitchDismissOverlay",
+        "TopLevelWindowForOverflowXamlIsland",
+        "XamlExplorerHostIslandWindow",
+        "Xaml_WindowedPopupClass",
+        "Windows.UI.Composition.DesktopWindowContentBridge",
+        "Windows.UI.Input.InputSite.WindowClass",
+        "PopupHost",
+        "Shell_Flyout",
     ];
 
     private readonly IDiagnosticsSink _log;
     private readonly NativeMethods.WinEventProc _foregroundCallback;
     private readonly NativeMethods.WinEventProc _locationCallback;
     private readonly int _ownProcessId;
+    private int _explorerProcessId;
 
     private nint _foregroundHook;
     private nint _locationHook;
@@ -174,7 +179,7 @@ internal sealed class FullScreenWatcher : IDisposable
 
         bool Callback(nint window, nint data)
         {
-            if (!IsCandidate(window))
+            if (!IsCandidate(window, out string className, out int processId))
             {
                 return true;
             }
@@ -190,6 +195,10 @@ internal sealed class FullScreenWatcher : IDisposable
                 if (FullScreenDetector.CoversMonitor(bounds, monitor.Bounds))
                 {
                     _ = found.Add(monitor.DeviceName);
+                    if (_log.IsEnabled)
+                    {
+                        _log.Write("fullscreen", $"Monitor {monitor.DeviceName} covered by [{className}] (pid {processId}, bounds {bounds}).");
+                    }
                 }
             }
 
@@ -203,8 +212,11 @@ internal sealed class FullScreenWatcher : IDisposable
         return found;
     }
 
-    private bool IsCandidate(nint window)
+    private bool IsCandidate(nint window, out string className, out int processId)
     {
+        className = string.Empty;
+        processId = 0;
+
         if (!NativeMethods.IsWindowVisible(window))
         {
             return false;
@@ -212,15 +224,36 @@ internal sealed class FullScreenWatcher : IDisposable
 
         // Our own mirrors are topmost and sit on the monitors being judged. Counting them would
         // make every monitor look occupied the moment a mirror was placed on it.
-        _ = NativeMethods.GetWindowThreadProcessId(window, out int processId);
+        _ = NativeMethods.GetWindowThreadProcessId(window, out processId);
         if (processId == _ownProcessId)
         {
             return false;
         }
 
-        if (_ignoredClasses.Contains(NativeMethods.GetWindowClassName(window), StringComparer.Ordinal))
+        className = NativeMethods.GetWindowClassName(window);
+        if (_ignoredClasses.Contains(className, StringComparer.Ordinal))
         {
             return false;
+        }
+
+        // Explorer windows that cover a monitor are almost always shell surfaces (desktop, taskbar,
+        // backdrop overlays, start menu, flyouts). The only Explorer window that is a true full-screen
+        // application is a full-screen File Explorer window ("CabinetWClass").
+        if (_explorerProcessId == 0)
+        {
+            nint primary = TaskbarWindows.FindPrimary();
+            if (primary != 0)
+            {
+                _ = NativeMethods.GetWindowThreadProcessId(primary, out _explorerProcessId);
+            }
+        }
+
+        if (_explorerProcessId != 0 && processId == _explorerProcessId)
+        {
+            if (!string.Equals(className, "CabinetWClass", StringComparison.Ordinal))
+            {
+                return false;
+            }
         }
 
         // A cloaked window has a perfectly valid rectangle and is not on screen at all: a suspended
