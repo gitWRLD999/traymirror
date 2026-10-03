@@ -22,6 +22,7 @@ internal static class TaskbarWindows
     /// <returns>The window handle, or zero when Explorer is not running.</returns>
     internal static nint FindPrimary()
     {
+        NativeMethods.EnsureDefaultDesktop();
         return NativeMethods.FindWindow(PrimaryClass, null);
     }
 
@@ -57,6 +58,7 @@ internal static class TaskbarWindows
     /// </remarks>
     internal static Dictionary<string, nint> FindSecondaries()
     {
+        NativeMethods.EnsureDefaultDesktop();
         var found = new Dictionary<string, nint>(StringComparer.OrdinalIgnoreCase);
 
         bool Callback(nint window, nint data)

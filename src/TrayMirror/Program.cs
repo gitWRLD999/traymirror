@@ -36,6 +36,21 @@ internal static class Program
     [STAThread]
     internal static int Main(string[] args)
     {
+        int exitCode = 0;
+        var thread = new Thread(() =>
+        {
+            exitCode = RealMain(args);
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+        return exitCode;
+    }
+
+    private static int RealMain(string[] args)
+    {
+        NativeMethods.EnsureDefaultDesktop();
+
         if (args.Contains("--probe", StringComparer.OrdinalIgnoreCase))
         {
             return RunProbe();
@@ -55,15 +70,30 @@ internal static class Program
             ShutdownMode = ShutdownMode.OnExplicitShutdown,
         };
 
+        application.DispatcherUnhandledException += (s, e) =>
+        {
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "traymirror_crash.txt"), "Dispatcher exception: " + e.Exception.ToString() + Environment.NewLine);
+        };
+        AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+        {
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "traymirror_crash.txt"), "AppDomain exception: " + e.ExceptionObject?.ToString() + Environment.NewLine);
+        };
+        application.Exit += (s, e) =>
+        {
+            File.AppendAllText(Path.Combine(Path.GetTempPath(), "traymirror_crash.txt"), $"Application.Exit: code {e.ApplicationExitCode}" + Environment.NewLine);
+        };
+
         using var host = new ApplicationHost(application.Dispatcher);
         host.Start();
 
         int exitCode = application.Run();
+        File.AppendAllText(Path.Combine(Path.GetTempPath(), "traymirror_crash.txt"), $"Run returned: code {exitCode}" + Environment.NewLine);
         return exitCode;
     }
 
     private static int RunProbe()
     {
+        NativeMethods.EnsureDefaultDesktop();
         string report = TrayProbeReport.Build();
         string path = Path.Combine(Path.GetTempPath(), "traymirror-probe.txt");
 

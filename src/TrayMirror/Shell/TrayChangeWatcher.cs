@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows.Automation;
 using TrayMirror.Core.Diagnostics;
+using TrayMirror.Interop;
 
 namespace TrayMirror.Shell;
 
@@ -57,6 +58,8 @@ internal sealed class TrayChangeWatcher : IDisposable
         {
             return;
         }
+
+        NativeMethods.EnsureDefaultDesktop();
 
         try
         {

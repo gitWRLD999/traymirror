@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows.Automation;
 using TrayMirror.Core.Diagnostics;
+using TrayMirror.Interop;
 
 namespace TrayMirror.Shell;
 
@@ -67,6 +68,8 @@ internal static class TrayIconInvoker
         {
             return false;
         }
+
+        NativeMethods.EnsureDefaultDesktop();
 
         try
         {
