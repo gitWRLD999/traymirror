@@ -72,16 +72,20 @@ internal static partial class TrayBoundaryProbe
             return null;
         }
 
-        (int? left, string method) = FindNotificationAreaLeft(elements, taskbarBounds, clock);
+        PixelRect legacy = NativeMethods.GetWindowBounds(TaskbarWindows.FindNotifyArea(primaryTaskbar));
+        int? hardFloor = (!legacy.IsEmpty && legacy.Left < clock) ? legacy.Left : null;
 
-        if (left is null)
+        (int? left, string method) = FindNotificationAreaLeft(elements, taskbarBounds, clock, hardFloor);
+
+        if (left is null && hardFloor is not null)
         {
-            PixelRect legacy = NativeMethods.GetWindowBounds(TaskbarWindows.FindNotifyArea(primaryTaskbar));
-            if (!legacy.IsEmpty && legacy.Left < clock)
-            {
-                left = legacy.Left;
-                method = "TrayNotifyWnd";
-            }
+            left = hardFloor;
+            method = "TrayNotifyWnd";
+        }
+        else if (left is not null && hardFloor is not null && left.Value < hardFloor.Value)
+        {
+            left = hardFloor;
+            method = "TrayNotifyWnd (clamped)";
         }
 
         if (left is not { } notificationArea)
@@ -139,6 +143,13 @@ internal static partial class TrayBoundaryProbe
     internal static IReadOnlyList<TrayElement> Snapshot(nint taskbar, IDiagnosticsSink log)
     {
         ArgumentNullException.ThrowIfNull(log);
+
+        if (taskbar == 0)
+        {
+            return [];
+        }
+
+        NativeMethods.EnsureDefaultDesktop();
 
         try
         {
@@ -242,6 +253,7 @@ internal static partial class TrayBoundaryProbe
     /// <param name="elements">The primary taskbar's elements.</param>
     /// <param name="taskbarBounds">The taskbar rectangle.</param>
     /// <param name="clockLeft">The already-resolved left edge of the clock.</param>
+    /// <param name="hardFloor">An optional minimum screen x boundary below which icons cannot belong to the notification area.</param>
     /// <returns>The boundary and the name of the strategy that produced it.</returns>
     /// <remarks>
     /// <para>
@@ -255,14 +267,15 @@ internal static partial class TrayBoundaryProbe
     internal static (int? Left, string Method) FindNotificationAreaLeft(
         IReadOnlyList<TrayElement> elements,
         PixelRect taskbarBounds,
-        int clockLeft)
+        int clockLeft,
+        int? hardFloor = null)
     {
         ArgumentNullException.ThrowIfNull(elements);
 
         int height = Math.Max(taskbarBounds.Height, 1);
         int maxIconWidth = height * 4;
         int maxGap = Math.Max(height / 2, 12);
-        int minLeft = taskbarBounds.Left + (taskbarBounds.Width / 4);
+        int minLeft = hardFloor ?? (taskbarBounds.Left + (taskbarBounds.Width / 4));
 
         TrayElement? container = elements.FirstOrDefault(
             e => !e.Bounds.IsEmpty
@@ -297,7 +310,7 @@ internal static partial class TrayBoundaryProbe
         for (int i = run.Count - 2; i >= 0; i--)
         {
             PixelRect bounds = run[i].Bounds;
-            if (bounds.Right < rightOfPrevious - maxGap)
+            if (bounds.Left < minLeft || bounds.Right < rightOfPrevious - maxGap)
             {
                 break;
             }
