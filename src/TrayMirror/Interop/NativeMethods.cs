@@ -108,8 +108,10 @@ internal static class NativeMethods
     internal const int EventSystemMenuPopupStart = 0x0006;
     internal const int EventSystemForeground = 0x0003;
     internal const int EventObjectShow = 0x8002;
-    internal const int EventObjectLocationChange = 0x800B;
     internal const int EventObjectHide = 0x8003;
+    internal const int EventObjectLocationChange = 0x800B;
+    internal const int EventObjectCloaked = 0x8017;
+    internal const int EventObjectUncloaked = 0x8018;
     internal const int WineventOutOfContext = 0x0000;
     internal const int WineventSkipOwnProcess = 0x0002;
 
@@ -375,5 +377,28 @@ internal static class NativeMethods
         char[] buffer = new char[256];
         int length = GetClassName(window, buffer, buffer.Length);
         return length <= 0 ? string.Empty : new string(buffer, 0, length);
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    internal static extern nint OpenDesktop(string lpszDesktop, uint dwFlags, bool fInherit, uint dwDesiredAccess);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetThreadDesktop(nint hDesktop);
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Desktop switch is best-effort fallback.")]
+    internal static void EnsureDefaultDesktop()
+    {
+        try
+        {
+            nint hDesk = OpenDesktop("Default", 0, false, 0x01FF);
+            if (hDesk != 0)
+            {
+                _ = SetThreadDesktop(hDesk);
+            }
+        }
+        catch (Exception)
+        {
+        }
     }
 }

@@ -70,8 +70,8 @@ internal sealed class MenuRelocator : IDisposable
     [
         "#32768",
         "Xaml_WindowedPopupClass",
-        "TopLevelWindowForOverflowXamlIsland",
         "XamlExplorerHostIslandWindow",
+        "TopLevelWindowForOverflowXamlIsland",
 
         // Created at the full size of a monitor and then animated into the corner, so the general
         // shape rule below would reject it. It is the only shell host that needs to be here.
@@ -92,6 +92,7 @@ internal sealed class MenuRelocator : IDisposable
 
     private nint _menuHook;
     private nint _showHook;
+    private nint _uncloakHook;
     private ArmedRelocation? _armed;
 
     /// <summary>
@@ -127,9 +128,18 @@ internal sealed class MenuRelocator : IDisposable
             0,
             NativeMethods.WineventOutOfContext | NativeMethods.WineventSkipOwnProcess);
 
-        if (_menuHook == 0 || _showHook == 0)
+        _uncloakHook = NativeMethods.SetWinEventHook(
+            NativeMethods.EventObjectUncloaked,
+            NativeMethods.EventObjectUncloaked,
+            0,
+            _callback,
+            0,
+            0,
+            NativeMethods.WineventOutOfContext | NativeMethods.WineventSkipOwnProcess);
+
+        if (_menuHook == 0 || _showHook == 0 || _uncloakHook == 0)
         {
-            _log.Write("menu", "One or both WinEvent hooks could not be registered. Menus will stay on the primary monitor.");
+            _log.Write("menu", "One or more WinEvent hooks could not be registered. Menus will stay on the primary monitor.");
         }
     }
 
@@ -192,6 +202,12 @@ internal sealed class MenuRelocator : IDisposable
             _showHook = 0;
         }
 
+        if (_uncloakHook != 0)
+        {
+            _ = NativeMethods.UnhookWinEvent(_uncloakHook);
+            _uncloakHook = 0;
+        }
+
         GC.KeepAlive(_callback);
     }
 
@@ -247,16 +263,29 @@ internal sealed class MenuRelocator : IDisposable
                && bounds.Width < primaryTaskbar.Width / 2;
     }
 
-    private static (int Left, int Top) TargetPosition(ArmedRelocation target, PixelRect menu)
+    private static (int Left, int Top) TargetPosition(ArmedRelocation target, PixelRect menu, string className)
     {
-        // Preserve the flyout's offset from the click. One that Windows aligned to the left edge of
-        // an icon should stay aligned to the left edge of the mirrored icon, not be re-centred.
-        int left = target.MirrorPoint.X + (menu.Left - target.PrimaryPoint.X);
+        int left;
+        int top;
 
-        // Keep the gap the flyout chose above the primary taskbar rather than the absolute
-        // vertical offset, because the two taskbars can be different heights.
-        int gap = target.PrimaryTaskbar.IsEmpty ? 0 : target.PrimaryTaskbar.Top - menu.Bottom;
-        int top = target.MirrorBounds.Top - gap - menu.Height;
+        if (string.Equals(className, "TopLevelWindowForOverflowXamlIsland", StringComparison.Ordinal))
+        {
+            // Center the overflow flyout directly over the clicked chevron icon on the mirror
+            left = target.MirrorPoint.X - (menu.Width / 2);
+            int gap = 8;
+            top = target.MirrorBounds.Top - gap - menu.Height;
+        }
+        else
+        {
+            // Preserve the flyout's offset from the click. One that Windows aligned to the left edge of
+            // an icon should stay aligned to the left edge of the mirrored icon, not be re-centred.
+            left = target.MirrorPoint.X + (menu.Left - target.PrimaryPoint.X);
+
+            // Keep the gap the flyout chose above the primary taskbar rather than the absolute
+            // vertical offset, because the two taskbars can be different heights.
+            int gap = target.PrimaryTaskbar.IsEmpty ? 0 : target.PrimaryTaskbar.Top - menu.Bottom;
+            top = target.MirrorBounds.Top - gap - menu.Height;
+        }
 
         PixelRect work = target.MonitorWorkArea;
         if (!work.IsEmpty)
@@ -312,16 +341,16 @@ internal sealed class MenuRelocator : IDisposable
             return;
         }
 
-        (int left, int top) = TargetPosition(target, menu);
+        (int left, int top) = TargetPosition(target, menu, className);
 
         bool moved = NativeMethods.SetWindowPos(
             window,
-            0,
+            NativeMethods.HwndTopmost,
             left,
             top,
             0,
             0,
-            NativeMethods.SwpNoSize | NativeMethods.SwpNoZOrder | NativeMethods.SwpNoActivate);
+            NativeMethods.SwpNoSize | NativeMethods.SwpShowWindow | NativeMethods.SwpNoActivate);
 
         _log.Write("menu", string.Create(
             CultureInfo.InvariantCulture,
