@@ -289,6 +289,7 @@ internal sealed class MirrorController : IDisposable
         Dictionary<string, nint> secondaries,
         Dictionary<string, PixelRect> secondaryBounds)
     {
+        NativeMethods.EnsureDefaultDesktop();
         TrayBoundaries? boundaries = TrayBoundaryProbe.ResolvePrimary(taskbar, taskbarBounds, _log);
 
         var clocks = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase);
@@ -531,9 +532,20 @@ internal sealed class MirrorController : IDisposable
 
     private bool IsOpenFlyoutVisible()
     {
-        return _openFlyout != 0
-               && NativeMethods.IsWindow(_openFlyout)
-               && NativeMethods.IsWindowVisible(_openFlyout);
+        if (_openFlyout == 0 || !NativeMethods.IsWindow(_openFlyout) || !NativeMethods.IsWindowVisible(_openFlyout))
+        {
+            _openFlyout = 0;
+            return false;
+        }
+
+        int hr = DwmApi.DwmGetWindowAttribute(_openFlyout, DwmApi.DwmwaCloaked, out int cloaked, sizeof(int));
+        if (hr >= 0 && cloaked != 0)
+        {
+            _openFlyout = 0;
+            return false;
+        }
+
+        return true;
     }
 
     private void DismissOpenFlyout()
